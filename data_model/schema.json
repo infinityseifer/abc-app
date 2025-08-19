@@ -1,0 +1,30 @@
+{
+  "students": {
+    "columns": [
+      {"name": "student_id", "type": "string", "required": true, "unique": true},
+      {"name": "student_name", "type": "string", "pii": true},
+      {"name": "grade", "type": "string"},
+      {"name": "homeroom", "type": "string"},
+      {"name": "iep_goals", "type": "string"}
+    ]
+  },
+  "incidents": {
+    "columns": [
+      {"name": "incident_id", "type": "string", "required": true},
+      {"name": "timestamp", "type": "datetime_utc", "required": true},
+      {"name": "date", "type": "date"},
+      {"name": "time", "type": "time"},
+      {"name": "student_id", "type": "string", "required": true, "fk": "students.student_id"},
+      {"name": "location", "type": "string"},
+      {"name": "antecedent", "type": "string"},
+      {"name": "behavior", "type": "string"},
+      {"name": "consequence", "type": "string"},
+      {"name": "duration_sec", "type": "integer"},
+      {"name": "intensity", "type": "integer", "min": 1, "max": 5},
+      {"name": "notes", "type": "string"},
+      {"name": "staff", "type": "string"},
+      {"name": "intervention_used", "type": "string"}
+      
+    ]
+  }
+}

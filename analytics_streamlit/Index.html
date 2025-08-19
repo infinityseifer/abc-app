@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{font-family:system-ui,Arial,sans-serif;margin:16px}
+  .card{max-width:720px;margin:0 auto;padding:16px;border:1px solid #eee;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+  label{display:block;font-weight:600;margin-top:10px}
+  input,select,textarea{width:100%;padding:10px;border:1px solid #ccc;border-radius:8px}
+  button{margin-top:16px;padding:12px 16px;border:0;border-radius:10px;background:#1f6feb;color:#fff;cursor:pointer}
+  .muted{font-size:12px;color:#666;margin-top:8px}
+</style>
+</head><body>
+<div class="card">
+  <h2>ABC Incident Form</h2>
+  <form id="f">
+    <label>Student Name<input name="student_name" required></label>
+    <label>Date<input type="date" name="date" required></label>
+    <label>Time<input type="time" name="time" required></label>
+    <label>Location
+      <select name="location" required>
+        <option value="">Select…</option>
+        <option>Classroom</option><option>Hallway</option><option>Cafeteria</option>
+        <option>Playground</option><option>Bus</option><option>Other</option>
+      </select>
+    </label>
+    <label>Antecedent
+      <select name="antecedent" required>
+        <option value="">Select…</option>
+        <option>Task demand</option><option>Transition</option><option>Peer conflict</option>
+        <option>Attention shift</option><option>Unstructured time</option><option>Other</option>
+      </select>
+    </label>
+    <label>Behavior
+      <select name="behavior" required>
+        <option value="">Select…</option>
+        <option>Noncompliance</option><option>Disruption</option><option>Elopement</option>
+        <option>Physical aggression</option><option>Property destruction</option>
+        <option>Self-injury</option><option>Verbal aggression</option><option>Other</option>
+      </select>
+    </label>
+    <label>Consequence
+      <select name="consequence" required>
+        <option value="">Select…</option>
+        <option>Attention</option><option>Escape</option><option>Tangible</option>
+        <option>Sensory</option><option>Planned ignore</option><option>Time-out</option>
+        <option>Office referral</option><option>Other</option>
+      </select>
+    </label>
+    <label>Duration (sec)<input type="number" name="duration_sec" min="0" required></label>
+    <label>Intensity (1–5)<input type="number" name="intensity" min="1" max="5" required></label>
+    <label>Notes<textarea name="notes" rows="3" placeholder="Objective description…"></textarea></label>
+    <label>Staff<input name="staff" required></label>
+    <button type="submit">Submit</button>
+    <div id="msg" class="muted"></div>
+  </form>
+</div>
+<script>
+const f = document.getElementById('f');
+f.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(f).entries());
+  document.getElementById('msg').textContent = 'Submitting…';
+  google.script.run
+    .withSuccessHandler(() => { document.getElementById('msg').textContent = 'Saved ✔'; f.reset(); })
+    .withFailureHandler(err => { document.getElementById('msg').textContent = 'Error: ' + err.message; })
+    .addIncident(data);
+});
+</script>
+</body></html>

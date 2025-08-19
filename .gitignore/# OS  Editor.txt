@@ -1,0 +1,25 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Python / Streamlit
+__pycache__/
+*.pyc
+.venv/
+.ENV/
+env/
+.egg-info/
+.ipynb_checkpoints/
+.streamlit/secrets.toml
+
+# Credentials / keys (never commit)
+*.json
+*.pem
+*.p12
+*.key
+
+# Build / misc
+*.log
+*.zip
+backups/
