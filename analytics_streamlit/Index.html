@@ -56,14 +56,26 @@
 </div>
 <script>
 const f = document.getElementById('f');
+
 f.addEventListener('submit', (e) => {
   e.preventDefault();
   const data = Object.fromEntries(new FormData(f).entries());
-  document.getElementById('msg').textContent = 'Submitting…';
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Submitting…';
+
+  // prove the bridge works
   google.script.run
-    .withSuccessHandler(() => { document.getElementById('msg').textContent = 'Saved ✔'; f.reset(); })
-    .withFailureHandler(err => { document.getElementById('msg').textContent = 'Error: ' + err.message; })
-    .addIncident(data);
+    .withSuccessHandler(v => console.log('ping:', v))
+    .withFailureHandler(err => console.error('ping failed:', err))
+    .ping();
+
+  // use bracket lookup to avoid any collision with names
+  const runner = google.script.run
+    .withSuccessHandler(() => { msg.textContent = 'Saved ✔'; f.reset(); })
+    .withFailureHandler(err => { console.error('addIncident failed:', err); msg.textContent = 'Error: ' + (err?.message || err); });
+
+  runner['addIncident'](data);  // <-- key change
 });
 </script>
+
 </body></html>

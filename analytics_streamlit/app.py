@@ -17,7 +17,7 @@ st.title("🏫 ABC Behavior App")
 
 # === 1) HUGE button to open your form (Apps Script web app) ===
 # Put your deployed /exec URL in secrets.toml as: form_url = "https://script.google.com/macros/s/AK.../exec"
-form_url = st.secrets.get("form_url", "https://script.google.com/macros/s/AKfycbzooNuvpe5TvlTxjO41wezeWczepkqoYTyIsX37KhGtT2vuKG1tiHVkRJntPZpoNOrcLw/exec")
+form_url = st.secrets.get("form_url", "https://script.google.com/macros/s/AKfycbzrpVfKjdAHfemCXltaeB3a6oRn4lvmr3AJYPn466x8kxhytbFyRr1wk08OTBmNw32YRA/exec")
 st.link_button("📝 Open ABC Incident Form", form_url, type="primary", use_container_width=True)
 
 st.divider()
