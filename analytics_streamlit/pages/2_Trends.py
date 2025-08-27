@@ -305,118 +305,49 @@ with row4[1]:
     else:
         st.info("No student_id column.")
 
-
-# === PDF Monthly Summary (per student) ===
-import io
-from datetime import date
-from calendar import monthrange
-from reportlab.lib.pagesizes import LETTER
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.lib import colors
-
-def _counts_table(title: str, s):
-    """Return a (title, Table) pair for a value_counts Series."""
-    s = s.dropna().astype(str).value_counts()
-    if s.empty:
-        return Paragraph(f"<b>{title}</b>: No data", getSampleStyleSheet()["Normal"]), Spacer(1, 6)
-    data = [["Value", "Count"]] + [[k, int(v)] for k, v in s.items()]
-    tbl = Table(data, hAlign="LEFT")
-    tbl.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f0f0f0")),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.black),
-        ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-        ("ALIGN", (1,1), (1,-1), "RIGHT"),
-        ("LEFTPADDING", (0,0), (-1,-1), 6),
-        ("RIGHTPADDING", (0,0), (-1,-1), 6),
-    ]))
-    return Paragraph(f"<b>{title}</b>", getSampleStyleSheet()["Normal"]), tbl
-
-def build_monthly_pdf(student_id: str, year: int, month: int, df_all: pd.DataFrame) -> bytes:
-    # Build month window
-    start = date(year, month, 1)
-    end = date(year, month, monthrange(year, month)[1])
-
-    # Filter for student + month
-    dfm = df_all.copy()
-    if "student_id" in dfm:
-        dfm = dfm[dfm["student_id"] == student_id]
-    if "date" in dfm:
-        dfm = dfm[(pd.to_datetime(dfm["date"]) >= pd.to_datetime(start)) &
-                  (pd.to_datetime(dfm["date"]) <= pd.to_datetime(end))]
-
-    # Prepare metrics
-    n = len(dfm)
-    avg_dur = f"{dfm['duration_sec'].mean():.0f}s" if "duration_sec" in dfm and n else "—"
-    med_int = f"{dfm['intensity'].median():.0f}" if "intensity" in dfm and n else "—"
-    days = dfm["date"].nunique() if "date" in dfm and n else 0
-
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=LETTER, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
-    styles = getSampleStyleSheet()
-    H1, H2, P = styles["Title"], styles["Heading2"], styles["BodyText"]
-
-    story = []
-    story.append(Paragraph(f"ABC Incident Summary — {student_id}", H1))
-    story.append(Paragraph(f"{start.strftime('%B %Y')}", H2))
-    story.append(Spacer(1, 8))
-
-    story.append(Paragraph(f"<b>Total incidents:</b> {n}", P))
-    story.append(Paragraph(f"<b>Avg duration:</b> {avg_dur}", P))
-    story.append(Paragraph(f"<b>Median intensity:</b> {med_int}", P))
-    story.append(Paragraph(f"<b>Days with incidents:</b> {days}", P))
-    story.append(Spacer(1, 10))
-
-    # Tables
-    if "behavior" in dfm:
-        story.extend(_counts_table("Behaviors", dfm["behavior"]))
-        story.append(Spacer(1, 8))
-    if "antecedent" in dfm:
-        story.extend(_counts_table("Antecedents", dfm["antecedent"]))
-        story.append(Spacer(1, 8))
-    if "location" in dfm:
-        story.extend(_counts_table("Locations", dfm["location"]))
-        story.append(Spacer(1, 8))
-    if "consequence" in dfm:
-        story.extend(_counts_table("Consequences", dfm["consequence"]))
-        story.append(Spacer(1, 8))
-
-    # Recent incidents (top 10)
-    if n:
-        cols = [c for c in ["date","time","behavior","location","intensity","duration_sec","notes","staff"] if c in dfm.columns]
-        recent = dfm.sort_values(dfm.columns[0], ascending=False)[cols].head(10) if cols else pd.DataFrame()
-        if not recent.empty:
-            story.append(Spacer(1, 4))
-            story.append(Paragraph("<b>Recent incidents (up to 10)</b>", P))
-            data = [ [c.replace("_"," ").title() for c in recent.columns] ] + recent.fillna("").astype(str).values.tolist()
-            tbl = Table(data, hAlign="LEFT", colWidths=[None]*len(recent.columns))
-            tbl.setStyle(TableStyle([
-                ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f0f0f0")),
-                ("GRID", (0,0), (-1,-1), 0.25, colors.grey),
-                ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-            ]))
-            story.append(tbl)
-
-    doc.build(story)
-    return buf.getvalue()
-
-# === UI: Export monthly PDF ===
+# === Exports (CSV) ===
 st.divider()
 with st.container(border=True):
-    st.subheader("📄 Export Monthly PDF Summary (per student)")
-    # Student picker
-    students = sorted(df["student_id"].dropna().unique().tolist()) if "student_id" in df else []
-    c1, c2, c3 = st.columns([2, 1, 1])
-    student_pick = c1.selectbox("Student", options=students if students else ["(none)"])
-    year_pick = c2.number_input("Year", value=pd.Timestamp.today().year, min_value=2000, max_value=2100, step=1)
-    month_pick = c3.selectbox("Month", options=list(range(1,13)), format_func=lambda m: pd.Timestamp(2000,m,1).strftime("%B"))
+    st.subheader("⬇️ Export data")
 
-    if st.button("Generate PDF"):
-        if not students:
-            st.warning("No students available.")
-        else:
-            pdf_bytes = build_monthly_pdf(student_pick, int(year_pick), int(month_pick), df)
-            fname = f"ABC_{student_pick}_{int(year_pick)}-{int(month_pick):02d}.pdf"
-            st.download_button("⬇️ Download PDF", data=pdf_bytes, file_name=fname, mime="application/pdf")
+    c1, c2, c3 = st.columns(3)
+
+    # Export the filtered incidents
+    csv_all = fdf.to_csv(index=False).encode("utf-8")
+    c1.download_button(
+        "Filtered incidents CSV",
+        data=csv_all,
+        file_name="incidents_filtered.csv",
+        mime="text/csv",
+        use_container_width=True
+    )
+
+    # Daily counts (if date exists)
+    if "date" in fdf:
+        daily = fdf.groupby("date").size().reset_index(name="incidents")
+        csv_daily = daily.to_csv(index=False).encode("utf-8")
+        c2.download_button(
+            "Daily counts CSV",
+            data=csv_daily,
+            file_name="incidents_daily_counts.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    else:
+        c2.caption("No date column for daily counts.")
+
+    # Behavior counts (if behavior exists)
+    if "behavior" in fdf:
+        beh = fdf["behavior"].dropna().value_counts().reset_index()
+        beh.columns = ["behavior", "count"]
+        csv_beh = beh.to_csv(index=False).encode("utf-8")
+        c3.download_button(
+            "Behavior counts CSV",
+            data=csv_beh,
+            file_name="incidents_behavior_counts.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    else:
+        c3.caption("No behavior column for behavior counts.")
 

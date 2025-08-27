@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import requests
 import streamlit as st
@@ -47,7 +48,43 @@ div.stButton > button:active{ background:var(--blue-a) !important; border-color:
 </style>
 """, unsafe_allow_html=True)
 
-# Top red form button
+# -------- navigation helper (buttons -> pages) --------
+from pathlib import Path
+import traceback
+
+def goto(script_basename: str):
+    """
+    Navigate to a multipage script inside ./pages by filename, e.g. '1_Incidents.py'.
+    If navigation fails, show helpful diagnostics (does the file exist?).
+    """
+    target_rel = f"pages/{script_basename}"
+    try:
+        st.switch_page(target_rel)
+    except Exception:
+        # Diagnostics: does the file exist on disk? what pages are present?
+        here = Path(__file__).resolve().parent
+        pages_dir = here / "pages"
+        expected_path = pages_dir / script_basename
+        exists = expected_path.exists()
+
+        available = []
+        if pages_dir.exists():
+            available = sorted(p.name for p in pages_dir.glob("*.py"))
+
+        st.error(
+            "Couldn't navigate to page.\n\n"
+            f"Target: `{target_rel}`\n"
+            f"Exists on disk: **{exists}** (looked for `{expected_path}`)\n\n"
+            "Make sure the filename matches **exactly** (case-sensitive on Streamlit Cloud) "
+            "and lives under the `pages/` folder. If you just added/renamed a page, "
+            "push to GitHub and redeploy, or restart the app.\n\n"
+            f"Pages I can see: {', '.join(available) if available else '(none found)'}"
+        )
+        # Optional: log the traceback to the app for quick debugging
+        st.caption("Debug:\n" + "".join(traceback.format_exc()))
+
+
+# -------- top red form button --------
 st.link_button("📝 Open ABC Incident Form", form_url, type="primary", use_container_width=True)
 
 st.divider()
@@ -57,18 +94,18 @@ st.subheader("Navigate")
 r1c1, r1c2 = st.columns(2)
 with r1c1:
     if st.button("📋 Incidents Table", use_container_width=True):
-        st.switch_page("pages/1_Incidents.py")
+        goto(script_basename="3_Incidents.py")
 with r1c2:
     if st.button("📈 Trends & Insights", use_container_width=True):
-        st.switch_page("pages/2_Trends.py")
+        goto(script_basename="2_Trends.py")
 
 r2c1, r2c2 = st.columns(2)
 with r2c1:
     if st.button("⚙️ Admin", use_container_width=True):
-        st.switch_page("pages/3_Admin.py")
+        goto(script_basename="1_Admin.py")
 with r2c2:
     if st.button("⏱️ Frequency", use_container_width=True):
-        st.switch_page("pages/4_Frequency.py")
+        goto(script_basename="4_Frequency.py")
 
 # ------------------ (optional) incidents preload ------------------
 @st.cache_data(ttl=60)
