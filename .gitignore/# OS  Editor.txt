@@ -23,3 +23,6 @@ env/
 *.log
 *.zip
 backups/
+
+
+.streamlit/secrets.toml

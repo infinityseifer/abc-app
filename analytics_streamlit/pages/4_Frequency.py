@@ -9,8 +9,40 @@ st.set_page_config(page_title="Frequency", layout="wide")
 st.title("⏱️ Frequency")
 
 # --- Use separate secrets so we don't touch your incidents API ---
-API_URL  = st.secrets["freq_api"]["url"]
-API_TOKEN = st.secrets["freq_api"]["token"]
+import os
+
+def _secret(path, env=None, default=None):
+    """
+    Read a secret from st.secrets using 'dot.path' (e.g., 'freq_api.url').
+    Fallback to an environment variable name, else default.
+    """
+    # env var fallback first (useful on local/dev containers)
+    if env and os.environ.get(env):
+        return os.environ.get(env)
+
+    # st.secrets fallback
+    try:
+        node = st.secrets
+        for part in path.split("."):
+            node = node[part]
+        return node
+    except Exception:
+        return default
+
+# --- Frequency API config ---
+API_URL   = _secret("freq_api.url",   env="FREQ_API_URL")
+API_TOKEN = _secret("freq_api.token", env="FREQ_API_TOKEN")
+
+if not API_URL or not API_TOKEN:
+    st.error(
+        "Missing Frequency API settings.\n\n"
+        "Add them to `.streamlit/secrets.toml`:\n\n"
+        "[freq_api]\nurl = \"https://script.google.com/macros/s/AKfycbyouxYK3x1Fxd-zysjIl0t25c4kEQu_X1FJMP68U4VYQOV3hr7K9BtiP2xKYN8cxW5Y_g/exec\"\n"
+        "token = \"YOUR_FREQ_TOKEN\"\n\n"
+        "Or set env vars FREQ_API_URL / FREQ_API_TOKEN."
+    )
+    st.stop()
+
 
 # Catalog used for buttons
 BEHAVIORS = [
@@ -166,8 +198,7 @@ with tab_reports:
         st.error(f"Could not load students.\n\n{e}")
         students_df = pd.DataFrame()
 
-    opts = ["All"]
-    label_to_key = {}
+    opts, label_to_key = ["All"], {}
     if not students_df.empty:
         for _, r in students_df.iterrows():
             opts.append(r["label"])
@@ -189,21 +220,68 @@ with tab_reports:
     k1.metric("Events", f"{len(ev):,}")
     k2.metric("Days observed", f"{ev['date'].nunique():,}" if not ev.empty else "—")
 
-    st.divider()
     if ev.empty:
+        st.divider()
         st.info("No events for the selected range.")
         st.stop()
 
-    daily = ev.groupby("date").size().reset_index(name="count")
-    st.altair_chart(
-        alt.Chart(daily).mark_line(point=True).encode(
-            x=alt.X("date:T", title="Date"),
-            y=alt.Y("count:Q", title="Events"),
-            tooltip=["date:T","count:Q"]
-        ).properties(height=280),
-        use_container_width=True
-    )
+    st.divider()
+    # ---- Time series toggle: Daily / Weekly ----
+    st.subheader("Time series")
+    gran = st.radio("View", ["Daily", "Weekly"], horizontal=True)
 
+    if gran == "Daily":
+        # default day = today if in range, else latest date in data
+        default_day = date.today()
+        dmin, dmax = ev["date"].min(), ev["date"].max()
+        if default_day < dmin or default_day > dmax:
+            default_day = dmax
+        day_pick = st.date_input("Pick a day", value=default_day)
+
+        # ensure hour column exists (0..23)
+        if "hour" not in ev.columns and "ts_ct" in ev.columns:
+            ev = ev.copy()
+            ev["hour"] = ev["ts_ct"].dt.hour
+
+        # filter to picked day
+        ev_day = ev[ev["date"] == day_pick]
+        # complete 0..23 hours with zeros
+        hours = pd.Index(range(24), name="hour")
+        hourly = ev_day.groupby("hour").size().reindex(hours, fill_value=0).reset_index(name="count")
+
+        st.altair_chart(
+            alt.Chart(hourly).mark_bar().encode(
+                x=alt.X("hour:O", title="Hour (0–23)"),
+                y=alt.Y("count:Q", title="Events"),
+                tooltip=["hour", "count"]
+            ).properties(height=260),
+            use_container_width=True
+        )
+
+    else:  # Weekly
+        # align to Monday..Sunday
+        monday = date.today() - timedelta(days=date.today().weekday())
+        week_start = st.date_input("Week starting (Mon)", value=monday)
+        week_start = week_start - timedelta(days=week_start.weekday())
+        week_end = week_start + timedelta(days=6)
+
+        evw = ev[(ev["date"] >= week_start) & (ev["date"] <= week_end)]
+        idx = pd.date_range(week_start, week_end, freq="D").date
+        daily_counts = evw.groupby("date").size()
+        daily = pd.Series(daily_counts, index=idx).reindex(idx, fill_value=0)
+        df_week = pd.DataFrame({"date": idx, "count": daily.values})
+
+        st.altair_chart(
+            alt.Chart(df_week).mark_line(point=True).encode(
+                x=alt.X("date:T", title="Date"),
+                y=alt.Y("count:Q", title="Events"),
+                tooltip=["date:T", "count:Q"]
+            ).properties(height=260),
+            use_container_width=True
+        )
+
+    st.divider()
+    # ---- By behavior (always shown for current filter) ----
     st.subheader("By behavior")
     beh = ev.groupby("behavior_label").size().reset_index(name="count").sort_values("count", ascending=False)
     st.altair_chart(
@@ -215,25 +293,33 @@ with tab_reports:
         use_container_width=True
     )
 
+    # ---- Heatmap Time of day × Day of week ----
     st.subheader("Time of day × Day of week")
+    ev = ev.copy()
     ev["dow"] = ev["ts_ct"].dt.day_name()
     st.altair_chart(
         alt.Chart(ev).mark_rect().encode(
             x=alt.X("hour:O", title="Hour"),
-            y=alt.Y("dow:N", title="Day", sort=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]),
+            y=alt.Y("dow:N", title="Day",
+                    sort=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]),
             color=alt.Color("count()", title="Events"),
             tooltip=["dow","hour","count()"]
         ).properties(height=260),
         use_container_width=True
     )
 
+    # ---- Events table + CSV ----
     st.subheader("Events (filtered)")
     show = ev[["ts_ct","student_key","behavior_label","notes","event_id"]].sort_values("ts_ct", ascending=False)
-    st.dataframe(show, use_container_width=True, hide_index=True, column_config={
-        "ts_ct": st.column_config.DatetimeColumn("Time (CT)", format="YYYY-MM-DD HH:mm"),
-        "student_key": "Student",
-        "behavior_label": "Behavior",
-        "notes": "Notes",
-        "event_id": "Event ID"
-    })
-    st.download_button("⬇️ Download CSV", data=show.to_csv(index=False), file_name="frequency_events.csv", mime="text/csv")
+    st.dataframe(
+        show, use_container_width=True, hide_index=True,
+        column_config={
+            "ts_ct": st.column_config.DatetimeColumn("Time (CT)", format="YYYY-MM-DD HH:mm"),
+            "student_key": "Student",
+            "behavior_label": "Behavior",
+            "notes": "Notes",
+            "event_id": "Event ID"
+        }
+    )
+    st.download_button("⬇️ Download CSV", data=show.to_csv(index=False),
+                       file_name="frequency_events.csv", mime="text/csv")
