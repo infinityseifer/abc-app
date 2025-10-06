@@ -139,4 +139,5 @@ if df.empty:
     st.info("No incidents yet.")
     st.stop()
 
-# … your filters, KPIs, charts, table …
+# End of file
+
